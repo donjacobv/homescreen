@@ -27,11 +27,14 @@ MasterVolume::MasterVolume(QObject* parent) :
 
 	if (m_vs) {
 		QObject::connect(m_vs, &VehicleSignals::connected, this, &MasterVolume::onConnected);
-		QObject::connect(m_vs, &VehicleSignals::authorized, this, &MasterVolume::onAuthorized);
-		QObject::connect(m_vs, &VehicleSignals::disconnected, this, &MasterVolume::onDisconnected);
 
 		m_vs->connect();
 	}
+}
+
+MasterVolume::~MasterVolume()
+{
+	delete m_vs;
 }
 
 qint32 MasterVolume::getVolume() const
@@ -39,60 +42,40 @@ qint32 MasterVolume::getVolume() const
 	return m_volume;
 }
 
-void MasterVolume::setVolume(qint32 volume)
+void MasterVolume::setVolume(quint32 volume)
 {
 	if (m_volume == volume)
 		return;
 
 	m_volume = volume;
 
-	if (!(m_vs && m_connected))
-		return;
+	if (m_vs)
+		m_vs->set("Vehicle.Cabin.Infotainment.Media.Volume", volume, true);
+}
 
-	m_vs->set("Vehicle.Cabin.Infotainment.Media.Volume", QString::number(volume));
+void MasterVolume::updateVolume(QString value)
+{
+	bool ok;
+	quint32 volume = value.toUInt(&ok);
+	if (ok) {
+		volume = qBound(0U, volume, 100U);
+		if (m_volume != volume)	{
+			m_volume = volume;
+			emit VolumeChanged();
+		}
+	}
 }
 
 void MasterVolume::onConnected()
 {
-	if (!m_vs)
-		return;
-
-	m_vs->authorize();
-}
-
-void MasterVolume::onAuthorized()
-{
-	if (!m_vs)
-		return;
-
-	m_connected = true;
+       if (!m_vs)
+               return;
 
 	QObject::connect(m_vs, &VehicleSignals::getSuccessResponse, this, &MasterVolume::onGetSuccessResponse);
 	QObject::connect(m_vs, &VehicleSignals::signalNotification, this, &MasterVolume::onSignalNotification);
 
 	m_vs->subscribe("Vehicle.Cabin.Infotainment.Media.Volume");
 	m_vs->get("Vehicle.Cabin.Infotainment.Media.Volume");
-}
-
-void MasterVolume::onDisconnected()
-{
-	QObject::disconnect(m_vs, &VehicleSignals::signalNotification, this, &MasterVolume::onGetSuccessResponse);
-	QObject::disconnect(m_vs, &VehicleSignals::signalNotification, this, &MasterVolume::onSignalNotification);
-
-	m_connected = false;
-}
-
-void MasterVolume::updateVolume(QString value)
-{
-	bool ok;
-	qint32 volume = value.toInt(&ok);
-	if (ok) {
-		volume = qBound(0, volume, 100);
-		if (m_volume != volume)	{
-			m_volume = volume;
-			emit VolumeChanged();
-		}
-	}
 }
 
 void MasterVolume::onGetSuccessResponse(QString path, QString value, QString timestamp)
