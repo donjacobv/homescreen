@@ -21,29 +21,26 @@
 class MasterVolume : public QObject
 {
 	Q_OBJECT
-	Q_PROPERTY (uint32_t volume READ getVolume WRITE setVolume NOTIFY VolumeChanged)
-
-private:
-	qint32 m_volume;
-	VehicleSignals *m_vs;
-	bool m_connected;
-
-	void updateVolume(QString value);
 
 public:
 	MasterVolume(QObject* parent = nullptr);
-	~MasterVolume() = default;
+	~MasterVolume();
 
 	Q_INVOKABLE qint32 getVolume() const;
-	Q_INVOKABLE void setVolume(qint32 val);
-
-private slots:
-	void onConnected();
-	void onAuthorized();
-	void onDisconnected();
-	void onGetSuccessResponse(QString path, QString value, QString timestamp);
-	void onSignalNotification(QString path, QString value, QString timestamp);
+	Q_INVOKABLE void setVolume(quint32 val);
+	Q_PROPERTY (uint32_t volume READ getVolume WRITE setVolume NOTIFY VolumeChanged)
 
 signals:
 	void VolumeChanged();
+
+private slots:
+	void onConnected();
+	void onGetSuccessResponse(QString path, QString value, QString timestamp);
+	void onSignalNotification(QString path, QString value, QString timestamp);
+
+private:
+	quint32 m_volume;
+	VehicleSignals *m_vs;
+
+	void updateVolume(QString value);
 };
