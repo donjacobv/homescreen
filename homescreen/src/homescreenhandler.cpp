@@ -29,7 +29,6 @@ HomescreenHandler::HomescreenHandler(Shell *_aglShell, ApplicationLauncher *laun
 {
 	mp_launcher = launcher;
 	mp_applauncher_client = new AppLauncherClient();
-	QPlatformNativeInterface *native = qApp->platformNativeInterface();
 
 	//
 	// The "started" event is received any time a start request is made to applaunchd,
@@ -94,14 +93,22 @@ void HomescreenHandler::addAppToStack(const QString& app_id)
 void HomescreenHandler::activateApp(const QString& app_id)
 {
 	struct agl_shell *agl_shell = aglShell->shell.get();
+	QScreen *tmp_screen = qApp->screens().first();
 	QPlatformNativeInterface *native = qApp->platformNativeInterface();
-	struct wl_output *mm_output = getWlOutput(native, qApp->screens().first());
+	struct wl_output *mm_output = nullptr;
+
+	if (!tmp_screen) {
+		HMI_DEBUG("HomeScreen", "No output found to activate on!\n");
+	} else {
+		mm_output = getWlOutput(native, tmp_screen);
+
+		HMI_DEBUG("HomeScreen", "Activating app_id %s by default on output %p\n",
+				app_id.toStdString().c_str(), mm_output);
+	}
 
 	if (mp_launcher) {
 		mp_launcher->setCurrent(app_id);
 	}
-	HMI_DEBUG("HomeScreen", "Activating app_id %s by default output %p\n",
-			app_id.toStdString().c_str(), mm_output);
 
 	// search for a pending application which might have a different output
 	auto iter = pending_app_list.begin();
@@ -111,6 +118,8 @@ void HomescreenHandler::activateApp(const QString& app_id)
 
 		if (app_to_search == app_id) {
 			found_pending_app = true;
+			HMI_DEBUG("HomeScreen", "Found app_id %s in pending list  of applications",
+					app_id.toStdString().c_str());
 			break;
 		}
 
@@ -122,6 +131,32 @@ void HomescreenHandler::activateApp(const QString& app_id)
 		QScreen *screen =
 			::find_screen(output_name.toStdString().c_str());
 
+		if (!screen) {
+			HMI_DEBUG("HomeScreen", "Can't activate application %s on another "
+				  "output, because output %s could not be found. "
+				  "Trying with remoting ones.",
+				  app_id.toStdString().c_str(),
+				  output_name.toStdString().c_str());
+
+			// try with remoting-remote-X which is the streaming
+			// one
+			std::string new_remote_output = 
+				"remoting-" + output_name.toStdString();
+
+			screen = ::find_screen(new_remote_output.c_str());
+			if (!screen) {
+				HMI_DEBUG("HomeScreen", "Can't activate application %s on another "
+					  "output, because output remoting-%s could not be found",
+					  app_id.toStdString().c_str(),
+					  output_name.toStdString().c_str());
+				return;
+			}
+
+			HMI_DEBUG("HomeScreen", "Found a stream remoting output %s to activate application %s on",
+				  new_remote_output.c_str(),
+				  app_id.toStdString().c_str());
+		}
+
 		mm_output = getWlOutput(native, screen);
 		pending_app_list.erase(iter);
 
@@ -129,6 +164,12 @@ void HomescreenHandler::activateApp(const QString& app_id)
 				"output to activate %s\n",
 				app_id.toStdString().c_str(),
 				output_name.toStdString().c_str());
+	}
+
+	if (!mm_output) {
+		HMI_DEBUG("HomeScreen", "No suitable output found for activating %s",
+				app_id.toStdString().c_str());
+		return;
 	}
 
 	HMI_DEBUG("HomeScreen", "Activating application %s",
