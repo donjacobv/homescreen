@@ -12,8 +12,7 @@
 
 #include "applicationlauncher.h"
 #include "AppLauncherClient.h"
-
-#include "shell.h"
+#include "AglShellGrpcClient.h"
 
 using namespace std;
 
@@ -21,7 +20,7 @@ class HomescreenHandler : public QObject
 {
 	Q_OBJECT
 public:
-	explicit HomescreenHandler(Shell *aglShell, ApplicationLauncher *launcher = 0, QObject *parent = 0);
+	explicit HomescreenHandler(ApplicationLauncher *launcher = 0, GrpcClient *_client = nullptr, QObject *parent = 0);
 	~HomescreenHandler();
 
 	Q_INVOKABLE void tapShortcut(QString application_id);
@@ -42,9 +41,7 @@ public slots:
 private:
 	ApplicationLauncher *mp_launcher;
 	AppLauncherClient *mp_applauncher_client;
-
-	Shell *aglShell;
-
+	GrpcClient *m_grpc_client;
 };
 
 #endif // HOMESCREENHANDLER_H

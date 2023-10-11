@@ -3,6 +3,7 @@
  * Copyright (C) 2016, 2017 Mentor Graphics Development (Deutschland) GmbH
  * Copyright (c) 2017, 2018 TOYOTA MOTOR CORPORATION
  * Copyright (c) 2022 Konsulko Group
+ * Copyright (c) 2023 Collabora, Ltd.
  */
 
 #include <QGuiApplication>
@@ -31,6 +32,9 @@
 
 #include "agl-shell-client-protocol.h"
 #include "shell.h"
+
+#include <thread>
+#include "AglShellGrpcClient.h"
 
 #ifndef MIN
 #define MIN(a, b) (((a) < (b)) ? (a) : (b))
@@ -361,6 +365,20 @@ load_agl_shell_app(QPlatformNativeInterface *native, QQmlApplicationEngine *engi
 	});
 }
 
+static void
+run_in_thread(GrpcClient *client)
+{
+        grpc::Status status = client->Wait();
+}
+
+static void
+app_status_callback(::agl_shell_ipc::AppStateResponse app_response)
+{
+	std::cout << " >> AppStateResponse app_id " <<
+		app_response.app_id() << ", with state " <<
+		app_response.state() << std::endl;
+}
+
 int main(int argc, char *argv[])
 {
 	setenv("QT_QPA_PLATFORM", "wayland", 1);
@@ -416,7 +434,6 @@ int main(int argc, char *argv[])
 
 
 	std::shared_ptr<struct agl_shell> agl_shell{shell_data.shell, agl_shell_destroy};
-	Shell *aglShell = new Shell(agl_shell, &app);
 
 	// Import C++ class to QML
 	qmlRegisterType<StatusBarModel>("HomeScreen", 1, 0, "StatusBarModel");
@@ -425,7 +442,13 @@ int main(int argc, char *argv[])
 	ApplicationLauncher *launcher = new ApplicationLauncher();
 	launcher->setCurrent(QStringLiteral("launcher"));
 
-	HomescreenHandler* homescreenHandler = new HomescreenHandler(aglShell, launcher);
+	GrpcClient *client = new GrpcClient();
+
+	// create a new thread to listner for gRPC events
+	std::thread th = std::thread(run_in_thread, client);
+	client->AppStatusState(app_status_callback);
+
+	HomescreenHandler* homescreenHandler = new HomescreenHandler(launcher, client);
 	shell_data.homescreenHandler = homescreenHandler;
 
 	QQmlApplicationEngine engine;
@@ -435,9 +458,6 @@ int main(int argc, char *argv[])
 	context->setContextProperty("launcher", launcher);
 	context->setContextProperty("weather", new Weather());
 	context->setContextProperty("bluetooth", new Bluetooth(false, context));
-
-	// We add it here even if we don't use it
-	context->setContextProperty("shell", aglShell);
 
 	load_agl_shell_app(native, &engine, shell_data.shell,
 			   screen_name, is_demo_val);

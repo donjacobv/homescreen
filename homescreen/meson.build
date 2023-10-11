@@ -9,6 +9,10 @@ dep_qtappfw = [
     dependency('qtappfw-applauncher')
 ]
 
+grpcpp_reflection_dep = cpp.find_library('grpc++_reflection')
+protoc = find_program('protoc')
+grpc_cpp = find_program('grpc_cpp_plugin')
+
 qt_defines = []
 qpa_header_path = join_paths(qt5_dep.version(), 'QtGui')
 qpa_header = join_paths(qpa_header_path, 'qpa/qplatformnativeinterface.h')
@@ -24,10 +28,35 @@ prog_scanner = find_program('wayland-scanner')
 agl_compositor_dep = dependency('agl-compositor-0.0.21-protocols')
 dir_agl_compositor_base = agl_compositor_dep.get_variable(pkgconfig: 'pkgdatadir')
 
+protoc_gen = generator(protoc, \
+                       output : ['@BASENAME@.pb.cc', '@BASENAME@.pb.h'],
+                       arguments : ['--proto_path=@CURRENT_SOURCE_DIR@/proto',
+                         '--cpp_out=@BUILD_DIR@',
+                         '@INPUT@'])
+
+generated_protoc_sources = protoc_gen.process('proto/agl_shell.proto')
+
+grpc_gen = generator(protoc, \
+                     output : ['@BASENAME@.grpc.pb.cc', '@BASENAME@.grpc.pb.h'],
+                     arguments : ['--proto_path=@CURRENT_SOURCE_DIR@/proto',
+                       '--grpc_out=@BUILD_DIR@',
+                       '--plugin=protoc-gen-grpc=' + grpc_cpp.path(),
+                       '@INPUT@'])
+generated_grpc_sources = grpc_gen.process('proto/agl_shell.proto')
+
+grpc_deps = [
+    dependency('protobuf'),
+    dependency('grpc'),
+    dependency('grpc++'),
+    grpcpp_reflection_dep,
+]
+
+
 homescreen_dep = [
     qt5_dep,
     dep_wayland_client,
     dep_qtappfw,
+    grpc_deps
 ]
 
 homescreen_resources = [
@@ -83,6 +112,7 @@ homescreen_src_headers = [
   'src/statusbarmodel.h',
   'src/statusbarserver.h',
   'src/homescreenhandler.h',
+  'src/AglShellGrpcClient.h',
   'src/shell.h'
 ]
 
@@ -96,9 +126,12 @@ homescreen_src = [
   'src/applicationlauncher.cpp',
   'src/mastervolume.cpp',
   'src/homescreenhandler.cpp',
+  'src/AglShellGrpcClient.cpp',
   'src/main.cpp',
   agl_shell_client_protocol_h,
-  agl_shell_protocol_c
+  agl_shell_protocol_c,
+  generated_protoc_sources,
+  generated_grpc_sources
 ]
 
 executable('homescreen', homescreen_src, resource_files, moc_files,

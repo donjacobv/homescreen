@@ -5,6 +5,7 @@
  */
 
 #include <QGuiApplication>
+#include <QScreen>
 #include <QFileInfo>
 #include <functional>
 
@@ -20,12 +21,10 @@ QScreen *find_screen(const char *output);
 // a user session by systemd
 #define LAUNCHER_APP_ID          "launcher"
 
-static struct wl_output *
-getWlOutput(QPlatformNativeInterface *native, QScreen *screen);
 
-HomescreenHandler::HomescreenHandler(Shell *_aglShell, ApplicationLauncher *launcher, QObject *parent) :
-	QObject(parent),
-	aglShell(_aglShell)
+HomescreenHandler::HomescreenHandler(ApplicationLauncher *launcher, GrpcClient *_client, QObject *parent) :
+	QObject(parent)
+	, m_grpc_client(_client)
 {
 	mp_launcher = launcher;
 	mp_applauncher_client = new AppLauncherClient();
@@ -43,14 +42,8 @@ HomescreenHandler::HomescreenHandler(Shell *_aglShell, ApplicationLauncher *laun
 
 HomescreenHandler::~HomescreenHandler()
 {
+	delete m_grpc_client;
 	delete mp_applauncher_client;
-}
-
-static struct wl_output *
-getWlOutput(QPlatformNativeInterface *native, QScreen *screen)
-{
-	void *output = native->nativeResourceForScreen("output", screen);
-	return static_cast<struct ::wl_output*>(output);
 }
 
 void HomescreenHandler::tapShortcut(QString app_id)
@@ -92,18 +85,15 @@ void HomescreenHandler::addAppToStack(const QString& app_id)
 
 void HomescreenHandler::activateApp(const QString& app_id)
 {
-	struct agl_shell *agl_shell = aglShell->shell.get();
-	QScreen *tmp_screen = qApp->screens().first();
-	QPlatformNativeInterface *native = qApp->platformNativeInterface();
-	struct wl_output *mm_output = nullptr;
+	QScreen *default_screen = qApp->screens().first();
+	std::string default_output_name;
 
-	if (!tmp_screen) {
-		HMI_DEBUG("HomeScreen", "No output found to activate on!\n");
+	if (!default_screen) {
+		HMI_DEBUG("HomeScreen", "No default output found to activate on!\n");
 	} else {
-		mm_output = getWlOutput(native, tmp_screen);
-
-		HMI_DEBUG("HomeScreen", "Activating app_id %s by default on output %p\n",
-				app_id.toStdString().c_str(), mm_output);
+		default_output_name = default_screen->name().toStdString();
+		HMI_DEBUG("HomeScreen", "Activating app_id %s by default on output %s\n",
+				app_id.toStdString().c_str(), default_output_name.c_str());
 	}
 
 	if (mp_launcher) {
@@ -155,27 +145,25 @@ void HomescreenHandler::activateApp(const QString& app_id)
 			HMI_DEBUG("HomeScreen", "Found a stream remoting output %s to activate application %s on",
 				  new_remote_output.c_str(),
 				  app_id.toStdString().c_str());
+			default_output_name = new_remote_output;
 		}
 
-		mm_output = getWlOutput(native, screen);
 		pending_app_list.erase(iter);
-
 		HMI_DEBUG("HomeScreen", "For application %s found another "
 				"output to activate %s\n",
 				app_id.toStdString().c_str(),
-				output_name.toStdString().c_str());
+				default_output_name.c_str());
 	}
 
-	if (!mm_output) {
+	if (default_output_name.empty()) {
 		HMI_DEBUG("HomeScreen", "No suitable output found for activating %s",
 				app_id.toStdString().c_str());
 		return;
 	}
 
-	HMI_DEBUG("HomeScreen", "Activating application %s",
-			app_id.toStdString().c_str());
-
-	agl_shell_activate_app(agl_shell, app_id.toStdString().c_str(), mm_output);
+	HMI_DEBUG("HomeScreen", "Activating application %s on output %s",
+			app_id.toStdString().c_str(), default_output_name.c_str());
+	m_grpc_client->ActivateApp(app_id.toStdString(), default_output_name);
 }
 
 void HomescreenHandler::deactivateApp(const QString& app_id)
