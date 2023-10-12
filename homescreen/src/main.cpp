@@ -16,6 +16,7 @@
 #include <QtQml/qqml.h>
 #include <QQuickWindow>
 #include <QTimer>
+#include <QScreen>
 
 #include <weather.h>
 #include <bluetooth.h>
@@ -31,7 +32,6 @@
 #include <wayland-client.h>
 
 #include "agl-shell-client-protocol.h"
-#include "shell.h"
 
 #include <thread>
 #include "AglShellGrpcClient.h"
@@ -87,34 +87,7 @@ static void
 agl_shell_app_state(void *data, struct agl_shell *agl_shell,
 		const char *app_id, uint32_t state)
 {
-#if 0
-	struct shell_data *shell_data = static_cast<struct shell_data *>(data);
-	HomescreenHandler *homescreenHandler = shell_data->homescreenHandler;
-
-	if (!homescreenHandler)
-		return;
-
-	switch (state) {
-	case AGL_SHELL_APP_STATE_STARTED:
-		qDebug() << "Got AGL_SHELL_APP_STATE_STARTED for app_id " << app_id;
-		homescreenHandler->processAppStatusEvent(app_id, "started");
-		break;
-	case AGL_SHELL_APP_STATE_TERMINATED:
-		qDebug() << "Got AGL_SHELL_APP_STATE_TERMINATED for app_id " << app_id;
-		// handled by HomescreenHandler::processAppStatusEvent
-		break;
-	case AGL_SHELL_APP_STATE_ACTIVATED:
-		qDebug() << "Got AGL_SHELL_APP_STATE_ACTIVATED for app_id " << app_id;
-		homescreenHandler->addAppToStack(app_id);
-		break;
-	case AGL_SHELL_APP_STATE_DEACTIVATED:
-		qDebug() << "Got AGL_SHELL_APP_STATE_DEACTIVATED for app_id " << app_id;
-		homescreenHandler->processAppStatusEvent(app_id, "deactivated");
-		break;
-	default:
-		break;
-	}
-#endif
+	/* unused */
 }
 
 static void

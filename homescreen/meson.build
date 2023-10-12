@@ -113,14 +113,12 @@ homescreen_src_headers = [
   'src/statusbarserver.h',
   'src/homescreenhandler.h',
   'src/AglShellGrpcClient.h',
-  'src/shell.h'
 ]
 
 moc_files = qt5.compile_moc(headers: homescreen_src_headers,
                             dependencies: qt5_dep)
 
 homescreen_src = [
-  'src/shell.cpp',
   'src/statusbarserver.cpp',
   'src/statusbarmodel.cpp',
   'src/applicationlauncher.cpp',
