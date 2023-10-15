@@ -28,6 +28,8 @@ public:
 	void addAppToStack(const QString& application_id);
 	void activateApp(const QString& app_id);
 	void deactivateApp(const QString& app_id);
+	void setGrpcClient(GrpcClient *_client) { m_grpc_client = _client; }
+	GrpcClient *getGrpcClient(void) { return m_grpc_client; }
 
 	QStringList apps_stack;
 	std::list<std::pair<const QString, const QString>> pending_app_list;

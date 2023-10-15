@@ -3,6 +3,7 @@
 
 #include <mutex>
 #include <condition_variable>
+#include <chrono>
 #include <grpc/grpc.h>
 #include <grpcpp/grpcpp.h>
 #include <grpcpp/server.h>
@@ -14,6 +15,9 @@
 
 #include "AglShellGrpcClient.h"
 #include "agl_shell.grpc.pb.h"
+#include "hmi-debug.h"
+
+using namespace std::chrono;
 
 namespace {
 	const char kDefaultGrpcServiceAddress[] = "127.0.0.1:14005";
@@ -21,8 +25,24 @@ namespace {
 
 GrpcClient::GrpcClient()
 {
+	struct timespec ts;
 	auto channel = grpc::CreateChannel(kDefaultGrpcServiceAddress,
 			grpc::InsecureChannelCredentials());
+
+	clock_gettime(CLOCK_MONOTONIC, &ts);
+	ts.tv_sec = 0;
+	ts.tv_nsec = 500 * 1000 * 1000; // 500ms
+
+	bool try_to_connect = true;
+	grpc_connectivity_state state = channel->GetState(try_to_connect);
+
+	while (state != GRPC_CHANNEL_READY) {
+		state = channel->GetState(try_to_connect);
+
+		HMI_DEBUG("HomesScreen", "waiting for channel state to be ready, current state %d", state);
+		nanosleep(&ts, NULL);
+	}
+
 
 	// init the stub here
 	m_stub = agl_shell_ipc::AglShellManagerService::NewStub(channel);
@@ -159,9 +179,9 @@ GrpcClient::Wait(void)
 }
 
 void
-GrpcClient::AppStatusState(Callback callback)
+GrpcClient::AppStatusState(Callback callback, void *data)
 {
-	reader->AppStatusState(callback);
+	reader->AppStatusState(callback, data);
 }
 
 std::vector<std::string>

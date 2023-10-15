@@ -15,7 +15,7 @@
 
 #include "agl_shell.grpc.pb.h"
 
-typedef void (*Callback)(agl_shell_ipc::AppStateResponse app_response);
+typedef void (*Callback)(agl_shell_ipc::AppStateResponse app_response, void *data);
 
 class Reader : public grpc::ClientReadReactor<::agl_shell_ipc::AppStateResponse> {
 public:
@@ -24,12 +24,13 @@ public:
 	{
 	}
 
-	void AppStatusState(Callback callback)
+	void AppStatusState(Callback callback, void *_data)
 	{
 		::agl_shell_ipc::AppStateRequest request;
 
 		// set up the callback
 		m_callback = callback;
+		m_data = _data;
 		m_stub->async()->AppStatusState(&m_context, &request, this);
 
 		StartRead(&m_app_state);
@@ -39,7 +40,7 @@ public:
 	void OnReadDone(bool ok) override
 	{
 		if (ok) {
-			m_callback(m_app_state);
+			m_callback(m_app_state, m_data);
 
 			// blocks in StartRead() if the server doesn't send
 			// antyhing
@@ -76,6 +77,7 @@ public:
 private:
 	grpc::ClientContext m_context;
 	::agl_shell_ipc::AppStateResponse m_app_state;
+	void *m_data;
 	agl_shell_ipc::AglShellManagerService::Stub *m_stub;
 
 	Callback m_callback;
@@ -100,7 +102,7 @@ public:
 	bool SetAppScale(const std::string& app_id, int32_t width, int32_t height);
 	std::vector<std::string> GetOutputs();
 	void GetAppState();
-	void AppStatusState(Callback callback);
+	void AppStatusState(Callback callback, void *data);
 	grpc::Status Wait();
 
 private:

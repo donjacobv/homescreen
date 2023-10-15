@@ -87,6 +87,7 @@ static void
 agl_shell_app_state(void *data, struct agl_shell *agl_shell,
 		const char *app_id, uint32_t state)
 {
+#if 0
 	struct shell_data *shell_data = static_cast<struct shell_data *>(data);
 	HomescreenHandler *homescreenHandler = shell_data->homescreenHandler;
 
@@ -113,6 +114,7 @@ agl_shell_app_state(void *data, struct agl_shell *agl_shell,
 	default:
 		break;
 	}
+#endif
 }
 
 static void
@@ -336,10 +338,21 @@ load_agl_shell_for_ci(QPlatformNativeInterface *native,
 }
 
 static void
+app_status_callback(::agl_shell_ipc::AppStateResponse app_response, void *data);
+
+static void
+run_in_thread(GrpcClient *client)
+{
+	grpc::Status status = client->Wait();
+}
+
+static void
 load_agl_shell_app(QPlatformNativeInterface *native, QQmlApplicationEngine *engine,
-		   struct agl_shell *agl_shell, const char *screen_name, bool is_demo)
+		   struct shell_data shell_data, const char *screen_name,
+		   bool is_demo, GrpcClient *client)
 {
 	QScreen *screen = nullptr;
+	HomescreenHandler *homescreenHandler = shell_data.homescreenHandler;
 
 	if (!screen_name)
 		screen = qApp->primaryScreen();
@@ -352,31 +365,53 @@ load_agl_shell_app(QPlatformNativeInterface *native, QQmlApplicationEngine *engi
 	}
 
 	if (is_demo) {
-		load_agl_shell_for_ci(native, engine, agl_shell, screen);
+		load_agl_shell_for_ci(native, engine, shell_data.shell, screen);
 	} else {
-		load_agl_shell(native, engine, agl_shell, screen);
+		load_agl_shell(native, engine, shell_data.shell, screen);
 	}
 
 	/* Delay the ready signal until after Qt has done all of its own setup
 	 * in a.exec() */
-	QTimer::singleShot(500, [agl_shell](){
+	QTimer::singleShot(500, [shell_data](){
 		qDebug() << "sending ready to compositor";
-		agl_shell_ready(agl_shell);
+		agl_shell_ready(shell_data.shell);
 	});
 }
 
 static void
-run_in_thread(GrpcClient *client)
+app_status_callback(::agl_shell_ipc::AppStateResponse app_response, void *data)
 {
-        grpc::Status status = client->Wait();
-}
+	HomescreenHandler *homescreenHandler = static_cast<HomescreenHandler *>(data);
 
-static void
-app_status_callback(::agl_shell_ipc::AppStateResponse app_response)
-{
-	std::cout << " >> AppStateResponse app_id " <<
-		app_response.app_id() << ", with state " <<
-		app_response.state() << std::endl;
+	if (!homescreenHandler) {
+		return;
+	}
+
+	auto app_id = QString(app_response.app_id().c_str());
+	auto state = app_response.state();
+
+	qDebug() << "appstateresponse: app_id " << app_id << "state " << state;
+
+	switch (state) {
+	case AGL_SHELL_APP_STATE_STARTED:
+		qDebug() << "Got AGL_SHELL_APP_STATE_STARTED for app_id " << app_id;
+		homescreenHandler->processAppStatusEvent(app_id, "started");
+		break;
+	case AGL_SHELL_APP_STATE_TERMINATED:
+		qDebug() << "Got AGL_SHELL_APP_STATE_TERMINATED for app_id " << app_id;
+		// handled by HomescreenHandler::processAppStatusEvent
+		break;
+	case AGL_SHELL_APP_STATE_ACTIVATED:
+		qDebug() << "Got AGL_SHELL_APP_STATE_ACTIVATED for app_id " << app_id;
+		homescreenHandler->addAppToStack(app_id);
+		break;
+	case AGL_SHELL_APP_STATE_DEACTIVATED:
+		qDebug() << "Got AGL_SHELL_APP_STATE_DEACTIVATED for app_id " << app_id;
+		homescreenHandler->processAppStatusEvent(app_id, "deactivated");
+		break;
+	default:
+		break;
+	}
 }
 
 int main(int argc, char *argv[])
@@ -410,6 +445,7 @@ int main(int argc, char *argv[])
 	// we need to have an app_id
 	app.setDesktopFileName("homescreen");
 
+
 	register_agl_shell(native, &shell_data);
 	if (!shell_data.shell) {
 		fprintf(stderr, "agl_shell extension is not advertised. "
@@ -435,6 +471,10 @@ int main(int argc, char *argv[])
 
 	std::shared_ptr<struct agl_shell> agl_shell{shell_data.shell, agl_shell_destroy};
 
+	GrpcClient *client = new GrpcClient();
+	// create a new thread to listner for gRPC events
+	std::thread th = std::thread(run_in_thread, client);
+
 	// Import C++ class to QML
 	qmlRegisterType<StatusBarModel>("HomeScreen", 1, 0, "StatusBarModel");
 	qmlRegisterType<MasterVolume>("MasterVolume", 1, 0, "MasterVolume");
@@ -442,14 +482,11 @@ int main(int argc, char *argv[])
 	ApplicationLauncher *launcher = new ApplicationLauncher();
 	launcher->setCurrent(QStringLiteral("launcher"));
 
-	GrpcClient *client = new GrpcClient();
-
-	// create a new thread to listner for gRPC events
-	std::thread th = std::thread(run_in_thread, client);
-	client->AppStatusState(app_status_callback);
-
-	HomescreenHandler* homescreenHandler = new HomescreenHandler(launcher, client);
+	HomescreenHandler* homescreenHandler = new HomescreenHandler(launcher);
 	shell_data.homescreenHandler = homescreenHandler;
+	shell_data.homescreenHandler->setGrpcClient(client);
+
+	client->AppStatusState(app_status_callback, homescreenHandler);
 
 	QQmlApplicationEngine engine;
 	QQmlContext *context = engine.rootContext();
@@ -459,8 +496,8 @@ int main(int argc, char *argv[])
 	context->setContextProperty("weather", new Weather());
 	context->setContextProperty("bluetooth", new Bluetooth(false, context));
 
-	load_agl_shell_app(native, &engine, shell_data.shell,
-			   screen_name, is_demo_val);
+	load_agl_shell_app(native, &engine, shell_data,
+			   screen_name, is_demo_val, client);
 
 	return app.exec();
 }
