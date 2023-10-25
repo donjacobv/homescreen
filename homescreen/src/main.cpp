@@ -321,8 +321,7 @@ run_in_thread(GrpcClient *client)
 
 static void
 load_agl_shell_app(QPlatformNativeInterface *native, QQmlApplicationEngine *engine,
-		   struct shell_data shell_data, const char *screen_name,
-		   bool is_demo, GrpcClient *client)
+		   struct shell_data shell_data, const char *screen_name, bool is_demo)
 {
 	QScreen *screen = nullptr;
 	HomescreenHandler *homescreenHandler = shell_data.homescreenHandler;
@@ -418,6 +417,9 @@ int main(int argc, char *argv[])
 	// we need to have an app_id
 	app.setDesktopFileName("homescreen");
 
+	GrpcClient *client = new GrpcClient();
+	// create a new thread to listner for gRPC events
+	std::thread th = std::thread(run_in_thread, client);
 
 	register_agl_shell(native, &shell_data);
 	if (!shell_data.shell) {
@@ -444,10 +446,6 @@ int main(int argc, char *argv[])
 
 	std::shared_ptr<struct agl_shell> agl_shell{shell_data.shell, agl_shell_destroy};
 
-	GrpcClient *client = new GrpcClient();
-	// create a new thread to listner for gRPC events
-	std::thread th = std::thread(run_in_thread, client);
-
 	// Import C++ class to QML
 	qmlRegisterType<StatusBarModel>("HomeScreen", 1, 0, "StatusBarModel");
 	qmlRegisterType<MasterVolume>("MasterVolume", 1, 0, "MasterVolume");
@@ -459,6 +457,9 @@ int main(int argc, char *argv[])
 	shell_data.homescreenHandler = homescreenHandler;
 	shell_data.homescreenHandler->setGrpcClient(client);
 
+	// blocks until we're sure connected with the server
+	HMI_DEBUG("HomescreenHandler", "Checking if connected to the gRPC server...");
+	client->WaitForConnected(500, 10);
 	client->AppStatusState(app_status_callback, homescreenHandler);
 
 	QQmlApplicationEngine engine;
@@ -470,7 +471,7 @@ int main(int argc, char *argv[])
 	context->setContextProperty("bluetooth", new Bluetooth(false, context));
 
 	load_agl_shell_app(native, &engine, shell_data,
-			   screen_name, is_demo_val, client);
+			   screen_name, is_demo_val);
 
 	return app.exec();
 }

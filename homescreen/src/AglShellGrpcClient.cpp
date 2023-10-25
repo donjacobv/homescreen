@@ -25,28 +25,31 @@ namespace {
 
 GrpcClient::GrpcClient()
 {
-	struct timespec ts;
-	auto channel = grpc::CreateChannel(kDefaultGrpcServiceAddress,
+	m_channel = grpc::CreateChannel(kDefaultGrpcServiceAddress,
 			grpc::InsecureChannelCredentials());
+
+	// init the stub here
+	m_stub = agl_shell_ipc::AglShellManagerService::NewStub(m_channel);
+	reader = new Reader(m_stub.get());
+}
+
+void
+GrpcClient::WaitForConnected(int wait_time_ms, int tries_timeout)
+{
+	struct timespec ts;
+	grpc_connectivity_state state;
+	int try_ = 0;
 
 	clock_gettime(CLOCK_MONOTONIC, &ts);
 	ts.tv_sec = 0;
 	ts.tv_nsec = 500 * 1000 * 1000; // 500ms
 
-	bool try_to_connect = true;
-	grpc_connectivity_state state = channel->GetState(try_to_connect);
-
-	while (state != GRPC_CHANNEL_READY) {
-		state = channel->GetState(try_to_connect);
-
+	while (((state = m_channel->GetState(true)) != GRPC_CHANNEL_READY) && 
+		try_++ < tries_timeout) {
 		HMI_DEBUG("HomesScreen", "waiting for channel state to be ready, current state %d", state);
 		nanosleep(&ts, NULL);
 	}
 
-
-	// init the stub here
-	m_stub = agl_shell_ipc::AglShellManagerService::NewStub(channel);
-	reader = new Reader(m_stub.get());
 }
 
 

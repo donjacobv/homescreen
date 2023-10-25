@@ -92,6 +92,7 @@ private:
 class GrpcClient {
 public:
 	GrpcClient();
+	void WaitForConnected(int wait_time_ms, int tries_timeout);
 	bool ActivateApp(const std::string& app_id, const std::string& output_name);
 	bool DeactivateApp(const std::string& app_id);
 	bool SetAppFloat(const std::string& app_id, int32_t x_pos, int32_t y_pos);
@@ -108,5 +109,6 @@ public:
 private:
 	Reader *reader;
 	std::unique_ptr<agl_shell_ipc::AglShellManagerService::Stub> m_stub;
+	std::shared_ptr<grpc::Channel> m_channel;
 };
 
