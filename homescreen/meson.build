@@ -25,7 +25,8 @@ endif
 
 dep_scanner = dependency('wayland-scanner')
 prog_scanner = find_program('wayland-scanner')
-agl_compositor_dep = dependency('agl-compositor-0.0.21-protocols')
+agl_compositor_version = '0.0.22'
+agl_compositor_dep = dependency('agl-compositor-' + agl_compositor_version + '-protocols')
 dir_agl_compositor_base = agl_compositor_dep.get_variable(pkgconfig: 'pkgdatadir')
 
 protoc_gen = generator(protoc, \
