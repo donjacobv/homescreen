@@ -118,8 +118,9 @@ agl_shell_app_on_output(void *data, struct agl_shell *agl_shell,
 	homescreenHandler->pending_app_list.push_back(new_pending_app);
 
 	if (homescreenHandler->apps_stack.contains(QString(app_id))) {
-		qDebug() << "Gove event to move " << app_id <<
+		qDebug() << "Got event to move " << app_id <<
 			" to another output " << output_name;
+
 		homescreenHandler->processAppStatusEvent(app_id, "started");
 	}
 }
@@ -371,7 +372,7 @@ app_status_callback(::agl_shell_ipc::AppStateResponse app_response, void *data)
 		break;
 	case AGL_SHELL_APP_STATE_TERMINATED:
 		qDebug() << "Got AGL_SHELL_APP_STATE_TERMINATED for app_id " << app_id;
-		// handled by HomescreenHandler::processAppStatusEvent
+		homescreenHandler->processAppStatusEvent(app_id, "terminated");
 		break;
 	case AGL_SHELL_APP_STATE_ACTIVATED:
 		qDebug() << "Got AGL_SHELL_APP_STATE_ACTIVATED for app_id " << app_id;
