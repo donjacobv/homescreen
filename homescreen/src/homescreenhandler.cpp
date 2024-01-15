@@ -146,6 +146,8 @@ void HomescreenHandler::activateApp(const QString& app_id)
 				  new_remote_output.c_str(),
 				  app_id.toStdString().c_str());
 			default_output_name = new_remote_output;
+		} else {
+			default_output_name = output_name.toStdString();
 		}
 
 		pending_app_list.erase(iter);
