@@ -6,7 +6,7 @@ Window {
     width: Screen.width
     height: Screen.height
     flags: Qt.FramelessWindowHint
-    visible: true
+    visible: false //true
 
     Image {
         anchors.fill: parent
